@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Page</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="navbar">
+        <div class="nav-left">
+            <span id="user-info"></span>
+        </div>
+        <div class="nav-right">
+            <a href="login.html" class="btn" id="login-btn" style="display: none;">Login</a>
+            <button class="btn" id="logout-btn" style="display: none;">Logout</button>
+        </div>
+    </div>
+
+    <div class="content">
+        <div id="upload-section" style="display: none; margin-top: 20px;">
+            <h2>Upload a Song</h2>
+            <form id="upload-form">
+                <input type="text" id="title" placeholder="Song Title" required><br>
+                <input type="text" id="artist" placeholder="Artist" required><br>
+                <input type="file" id="song" accept=".mp3" required><br>
+                <button type="submit">Upload</button>
+            </form>
+            <div id="upload-message" style="margin-top: 10px; color: green;"></div>
+        </div>
+        <div id="songs-container" style="margin-top: 20px;">
+            <h2>Uploaded Songs</h2>
+            <div id="songs-list"></div>
+        </div>
+    </div>
+    
+    <script>
+        const userInfoElement = document.getElementById('user-info');
+        const loginBtn = document.getElementById('login-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const uploadSection = document.getElementById('upload-section');
+        const uploadForm = document.getElementById('upload-form');
+        const uploadMessage = document.getElementById('upload-message');
+        const songsList = document.getElementById('songs-list');
+    
+        const user = JSON.parse(localStorage.getItem('user'));
+    
+        if (user) {
+            userInfoElement.textContent = `${user.username}`;
+            loginBtn.style.display = 'none';
+            logoutBtn.style.display = 'inline-block';
+            uploadSection.style.display = 'block';
+        } else {
+            userInfoElement.textContent = '';
+            loginBtn.style.display = 'inline-block';
+            logoutBtn.style.display = 'none';
+            uploadSection.style.display = 'none';
+        }
+    
+        logoutBtn.addEventListener('click', () => {
+            localStorage.removeItem('user');
+            userInfoElement.textContent = '';
+            loginBtn.style.display = 'inline-block';
+            logoutBtn.style.display = 'none';
+            uploadSection.style.display = 'none';
+            loadSongs();
+        });
+
+    
+        // Upload functionality
+        uploadForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+    
+            const title = document.getElementById('title').value.trim();
+            const artist = document.getElementById('artist').value.trim();
+            const songFile = document.getElementById('song').files[0];
+    
+            if (!user) {
+                uploadMessage.textContent = 'You must be logged in to upload!';
+                uploadMessage.style.color = 'red';
+                return;
+            }
+    
+            const formData = new FormData();
+            formData.append('title', title);
+            formData.append('artist', artist);
+            formData.append('song', songFile);
+    
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+    
+                if (!response.ok) {
+                    const error = await response.json();
+                    uploadMessage.textContent = error.message;
+                    uploadMessage.style.color = 'red';
+                    return;
+                }
+    
+                const result = await response.json();
+                uploadMessage.textContent = 'Song uploaded successfully!';
+                uploadMessage.style.color = 'green';
+                loadSongs();
+            } catch (error) {
+                uploadMessage.textContent = 'An error occurred. Please try again.';
+                uploadMessage.style.color = 'red';
+            }
+        });
+    
+        async function loadSongs() {
+            try {
+                const response = await fetch('/songs');
+                const songs = await response.json();
+
+                songsList.innerHTML = '';
+
+                const user = JSON.parse(localStorage.getItem('user'));
+
+                songs.forEach(song => {
+                    const card = document.createElement('div');
+                    card.classList.add('card');
+                    card.style.border = '1px solid #ccc';
+                    card.style.padding = '10px';
+                    card.style.margin = '10px';
+                    card.style.borderRadius = '8px';
+                    card.style.boxShadow = '0px 4px 8px rgba(0, 0, 0, 0.2)';
+                    card.innerHTML = `
+                        <h3>${song.title}</h3>
+                        <p><strong>Artist:</strong> ${song.artist}</p>
+                        <audio controls>
+                            <source src="${song.url}" type="audio/mpeg">
+                            Your browser does not support the audio element.
+                        </audio>
+                        ${user ? `<button class="delete-btn" data-filename="${song.url.split('/').pop()}">Delete</button>` : ''}
+                    `;
+                    songsList.appendChild(card);
+                });
+
+                if (user) {
+                    document.querySelectorAll('.delete-btn').forEach(button => {
+                        button.addEventListener('click', async (event) => {
+                            const filename = event.target.getAttribute('data-filename');
+                            try {
+                                const response = await fetch(`/songs/${filename}`, {
+                                    method: 'DELETE',
+                                });
+
+                                if (!response.ok) {
+                                    const error = await response.json();
+                                    alert(error.message);
+                                    return;
+                                }
+
+                                alert('Song deleted successfully!');
+                                loadSongs();
+                            } catch (error) {
+                                console.error('Error deleting song:', error);
+                            }
+                        });
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading songs:', error);
+            }
+        }
+
+    loadSongs();
+    
+    </script>
+</body>
+</html>
